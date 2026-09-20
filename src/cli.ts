@@ -13,7 +13,7 @@ function parseCliOptions(args: string[]): CliOptions {
   const outputIndex = rest.indexOf("--out");
   const outputPath = outputIndex >= 0 ? rest[outputIndex + 1] : undefined;
   if (!inputPath || !outputPath || outputIndex + 2 !== rest.length) {
-    throw new Error("USAGE: document-media-extractor <file.docx> --out <directory>");
+    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx> --out <directory>");
   }
   return { inputPath, outputPath };
 }

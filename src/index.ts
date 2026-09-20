@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 
-export type DocumentFormat = "docx";
+export type DocumentFormat = "docx" | "pptx";
 
 export type MediaAsset = {
   sourcePath: string;
@@ -48,6 +48,7 @@ export type ManifestAsset = {
   sourcePath: string;
   originalName: string;
   accessibleDescription?: string;
+  references?: OoxmlReference[];
   exportName?: string;
   mediaType: string;
   byteSize: number;
@@ -58,6 +59,12 @@ export type ManifestAsset = {
   sha256: string;
   included: boolean;
   reason: AssetDecision;
+};
+
+export type OoxmlReference = {
+  partPath: string;
+  relationshipId: string;
+  slideNumber?: number;
 };
 
 export type ExtractionManifest = {
@@ -96,7 +103,20 @@ function mediaTypeFromName(name: string): string {
 
 function documentFormat(sourceName: string): DocumentFormat {
   if (sourceName.toLowerCase().endsWith(".docx")) return "docx";
+  if (sourceName.toLowerCase().endsWith(".pptx")) return "pptx";
   throw new Error("UNSUPPORTED_FORMAT");
+}
+
+function mediaPrefix(format: DocumentFormat): string {
+  return format === "docx" ? "word/media/" : "ppt/media/";
+}
+
+function requiredDocumentPart(format: DocumentFormat): string {
+  return format === "docx" ? "word/document.xml" : "ppt/presentation.xml";
+}
+
+function invalidDocumentError(format: DocumentFormat): string {
+  return format === "docx" ? "INVALID_DOCX" : "INVALID_PPTX";
 }
 
 function pngDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
@@ -204,8 +224,19 @@ function attribute(tag: string, name: string): string | undefined {
   return match?.[2]?.trim() || undefined;
 }
 
-function normalizeRelationshipTarget(target: string): string {
-  return `word/${target.replace(/^\.\//, "").replace(/^\//, "")}`;
+function resolveRelationshipTarget(partPath: string, target: string): string {
+  const directory = partPath.split("/").slice(0, -1);
+  const segments = [...directory, ...target.split("/")];
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      resolved.pop();
+      continue;
+    }
+    resolved.push(segment);
+  }
+  return resolved.join("/");
 }
 
 async function accessibleDescriptions(archive: JSZip): Promise<Map<string, string>> {
@@ -218,7 +249,7 @@ async function accessibleDescriptions(archive: JSZip): Promise<Map<string, strin
   for (const tag of relationshipText.match(/<Relationship\b[^>]*>/gi) ?? []) {
     const id = attribute(tag, "Id");
     const target = attribute(tag, "Target");
-    if (id && target) targetById.set(id, normalizeRelationshipTarget(target));
+    if (id && target) targetById.set(id, resolveRelationshipTarget("word/document.xml", target));
   }
 
   const descriptions = new Map<string, string>();
@@ -231,6 +262,58 @@ async function accessibleDescriptions(archive: JSZip): Promise<Map<string, strin
     if (description && target && !descriptions.has(target)) descriptions.set(target, description);
   }
   return descriptions;
+}
+
+type AssetProvenance = {
+  descriptions: Map<string, string>;
+  references: Map<string, OoxmlReference[]>;
+};
+
+async function pptxProvenance(archive: JSZip): Promise<AssetProvenance> {
+  const descriptions = new Map<string, string>();
+  const references = new Map<string, OoxmlReference[]>();
+  const slidePaths = Object.keys(archive.files)
+    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
+    .sort();
+
+  for (const partPath of slidePaths) {
+    const slide = archive.files[partPath];
+    const relationshipPath = partPath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
+    const relationships = archive.file(relationshipPath);
+    if (!slide || !relationships) continue;
+
+    const targetById = new Map<string, string>();
+    const relationshipText = await relationships.async("string");
+    for (const tag of relationshipText.match(/<Relationship\b[^>]*>/gi) ?? []) {
+      const id = attribute(tag, "Id");
+      const target = attribute(tag, "Target");
+      if (id && target) targetById.set(id, resolveRelationshipTarget(partPath, target));
+    }
+
+    const slideNumber = Number(/slide(\d+)\.xml$/i.exec(partPath)?.[1]);
+    const slideText = await slide.async("string");
+    for (const picture of slideText.match(/<p:pic\b[\s\S]*?<\/p:pic>/gi) ?? []) {
+      const properties = picture.match(/<p:cNvPr\b[^>]*>/i)?.[0];
+      const embedId = picture.match(/<a:blip\b[^>]*\br:embed\s*=\s*(["'])(.*?)\1/i)?.[2];
+      const target = embedId ? targetById.get(embedId) : undefined;
+      if (!target || !embedId) continue;
+
+      const reference = { partPath, relationshipId: embedId, slideNumber };
+      const existing = references.get(target) ?? [];
+      existing.push(reference);
+      references.set(target, existing);
+
+      const description = properties ? attribute(properties, "descr") : undefined;
+      if (description && !descriptions.has(target)) descriptions.set(target, description);
+    }
+  }
+
+  return { descriptions, references };
+}
+
+async function assetProvenance(archive: JSZip, format: DocumentFormat): Promise<AssetProvenance> {
+  if (format === "pptx") return pptxProvenance(archive);
+  return { descriptions: await accessibleDescriptions(archive), references: new Map() };
 }
 
 export async function extractDocumentMedia(
@@ -246,17 +329,17 @@ export async function extractDocumentMedia(
     throw new Error("INVALID_ARCHIVE");
   }
 
-  if (!archive.file("[Content_Types].xml") || !archive.file("word/document.xml")) {
-    throw new Error("INVALID_DOCX");
+  if (!archive.file("[Content_Types].xml") || !archive.file(requiredDocumentPart(format))) {
+    throw new Error(invalidDocumentError(format));
   }
 
   const mediaPaths = Object.keys(archive.files)
-    .filter((path) => path.startsWith("word/media/") && !archive.files[path].dir)
+    .filter((path) => path.startsWith(mediaPrefix(format)) && !archive.files[path].dir)
     .sort();
 
   if (mediaPaths.length === 0) throw new Error("NO_MEDIA");
 
-  const descriptions = await accessibleDescriptions(archive);
+  const provenance = await assetProvenance(archive, format);
 
   const candidates = await Promise.all(
     mediaPaths.map(async (sourcePath) => {
@@ -267,7 +350,8 @@ export async function extractDocumentMedia(
       return {
         sourcePath,
         originalName,
-        accessibleDescription: descriptions.get(sourcePath),
+        accessibleDescription: provenance.descriptions.get(sourcePath),
+        references: provenance.references.get(sourcePath),
         mediaType,
         bytes,
         dimensions,
@@ -306,6 +390,7 @@ export async function extractDocumentMedia(
       ...(candidate.accessibleDescription
         ? { accessibleDescription: candidate.accessibleDescription }
         : {}),
+      ...(candidate.references?.length ? { references: candidate.references } : {}),
       mediaType: candidate.mediaType,
       byteSize: candidate.bytes.byteLength,
       sha256: candidate.sha256,
