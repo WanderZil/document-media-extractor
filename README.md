@@ -63,6 +63,10 @@ For the most useful review, extract with the default preservation policy so all 
 
 Processing is local. The project does not use a backend, upload documents, require an account, or fetch remote URLs.
 
+## Related workflow
+
+Need images from webpages rather than local Office documents? [Bulk Image Download](https://bulkimagedownload.com) handles URL-based, browser-aware collection.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). All fixtures must be safe to redistribute.
