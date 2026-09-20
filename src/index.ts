@@ -26,6 +26,16 @@ export type ExtractionPolicy = {
   maxAspectRatio?: number;
   exactDuplicates?: ExactDuplicatePolicy;
   namingTemplate?: string;
+  limits?: ExtractionLimits;
+};
+
+export type ExtractionLimits = {
+  maxInputBytes?: number;
+  maxArchiveEntries?: number;
+  maxExpandedBytes?: number;
+  maxMediaCount?: number;
+  maxMediaBytes?: number;
+  maxTotalMediaBytes?: number;
 };
 
 export type AssetDecision =
@@ -86,7 +96,12 @@ export type ExtractDocumentMediaInput = {
   sourceName: string;
   bytes: Uint8Array;
   policy?: ExtractionPolicy;
+  signal?: AbortSignal;
 };
+
+export type BatchExtractionResult =
+  | { input: ExtractDocumentMediaInput; status: "success"; result: ExtractionResult }
+  | { input: ExtractDocumentMediaInput; status: "failure"; error: { code: string } };
 
 function mediaTypeFromName(name: string): string {
   const extension = name.split(".").at(-1)?.toLowerCase();
@@ -127,6 +142,19 @@ function invalidDocumentError(format: DocumentFormat): string {
   if (format === "docx") return "INVALID_DOCX";
   if (format === "pptx") return "INVALID_PPTX";
   return "INVALID_XLSX";
+}
+
+function assertNotCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error("CANCELLED");
+}
+
+function assertLimit(value: number, maximum: number | undefined, error: string): void {
+  if (maximum !== undefined && value > maximum) throw new Error(error);
+}
+
+function archiveEntrySize(entry: unknown): number {
+  const size = (entry as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize;
+  return typeof size === "number" && Number.isFinite(size) ? size : 0;
 }
 
 function pngDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
@@ -399,6 +427,9 @@ export async function extractDocumentMedia(
 ): Promise<ExtractionResult> {
   const format = documentFormat(input.sourceName);
   const policy = input.policy ?? {};
+  const limits = policy.limits ?? {};
+  assertNotCancelled(input.signal);
+  assertLimit(input.bytes.byteLength, limits.maxInputBytes, "LIMIT_INPUT_BYTES");
 
   let archive: JSZip;
   try {
@@ -406,6 +437,15 @@ export async function extractDocumentMedia(
   } catch {
     throw new Error("INVALID_ARCHIVE");
   }
+  assertNotCancelled(input.signal);
+
+  const archiveEntries = Object.values(archive.files);
+  assertLimit(archiveEntries.length, limits.maxArchiveEntries, "LIMIT_ARCHIVE_ENTRIES");
+  assertLimit(
+    archiveEntries.filter((entry) => !entry.dir).reduce((total, entry) => total + archiveEntrySize(entry), 0),
+    limits.maxExpandedBytes,
+    "LIMIT_EXPANDED_BYTES",
+  );
 
   if (!archive.file("[Content_Types].xml") || !archive.file(requiredDocumentPart(format))) {
     throw new Error(invalidDocumentError(format));
@@ -416,14 +456,25 @@ export async function extractDocumentMedia(
     .sort();
 
   if (mediaPaths.length === 0) throw new Error("NO_MEDIA");
+  assertLimit(mediaPaths.length, limits.maxMediaCount, "LIMIT_MEDIA_COUNT");
+  const mediaEntrySizes = mediaPaths.map((path) => archiveEntrySize(archive.files[path]));
+  assertLimit(
+    mediaEntrySizes.reduce((total, size) => total + size, 0),
+    limits.maxTotalMediaBytes,
+    "LIMIT_TOTAL_MEDIA_BYTES",
+  );
 
   const provenance = await assetProvenance(archive, format);
+  assertNotCancelled(input.signal);
 
   const candidates = await Promise.all(
     mediaPaths.map(async (sourcePath) => {
+      assertNotCancelled(input.signal);
       const originalName = sourcePath.split("/").at(-1) ?? sourcePath;
       const mediaType = mediaTypeFromName(originalName);
       const bytes = await archive.files[sourcePath].async("uint8array");
+      assertNotCancelled(input.signal);
+      assertLimit(bytes.byteLength, limits.maxMediaBytes, "LIMIT_MEDIA_BYTES");
       const dimensions = dimensionsFor(mediaType, bytes);
       return {
         sourcePath,
@@ -444,6 +495,7 @@ export async function extractDocumentMedia(
   const assets: MediaAsset[] = [];
 
   for (const candidate of candidates) {
+    assertNotCancelled(input.signal);
     let reason = decisionFor(candidate.mediaType, candidate.bytes, candidate.dimensions, policy);
     if (
       reason === "INCLUDED" &&
@@ -502,4 +554,22 @@ export async function extractDocumentMedia(
     },
     assets,
   };
+}
+
+export async function extractDocumentMediaBatch(
+  inputs: readonly ExtractDocumentMediaInput[],
+): Promise<BatchExtractionResult[]> {
+  const results: BatchExtractionResult[] = [];
+  for (const input of inputs) {
+    try {
+      results.push({ input, status: "success", result: await extractDocumentMedia(input) });
+    } catch (error) {
+      results.push({
+        input,
+        status: "failure",
+        error: { code: error instanceof Error ? error.message : "UNKNOWN_ERROR" },
+      });
+    }
+  }
+  return results;
 }

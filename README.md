@@ -28,6 +28,23 @@ const result = await extractDocumentMedia({
 
 `{name}` uses a Word accessibility description only when its OOXML relationship maps it reliably to one media part; otherwise it falls back to the embedded filename. Names are sanitized and collision-resolved deterministically.
 
+### Safety and batches
+
+Callers can opt into bounded work for CI or user-supplied files. Limit errors are explicit (for example, `LIMIT_EXPANDED_BYTES`), and `AbortSignal` cancellation reports `CANCELLED` rather than returning partial results. `extractDocumentMediaBatch(inputs)` isolates failures: successful inputs retain their results while other items report a stable error code.
+
+```ts
+policy: {
+  limits: {
+    maxInputBytes: 50_000_000,
+    maxArchiveEntries: 2_000,
+    maxExpandedBytes: 200_000_000,
+    maxMediaCount: 500,
+    maxMediaBytes: 20_000_000,
+    maxTotalMediaBytes: 100_000_000,
+  },
+}
+```
+
 ## Development CLI
 
 ```sh
