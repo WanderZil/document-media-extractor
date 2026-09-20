@@ -20,7 +20,7 @@ function parseCliOptions(args: string[]): CliOptions {
   const policyPath = policyIndex >= 0 ? rest[policyIndex + 1] : undefined;
   const expectedArgs = policyPath ? 4 : 2;
   if (!inputPath || !outputPath || outputIndex < 0 || ![2, 4].includes(rest.length) || rest.length !== expectedArgs) {
-    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx|file.xlsx> --out <directory> [--policy policy.json]\n   or: document-media-extractor --batch <directory> --out <directory> [--policy policy.json]");
+    throw new Error("USAGE: document-media-extractor <supported-file> --out <directory> [--policy policy.json]\n   Supports OOXML, OpenDocument, EPUB, CBZ, and ZIP containers.\n   or: document-media-extractor --batch <directory> --out <directory> [--policy policy.json]");
   }
   return { mode, inputPath, outputPath, policyPath };
 }
@@ -54,7 +54,12 @@ function batchFolderName(inputName: string, index: number): string {
 async function supportedFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isFile() && [".docx", ".pptx", ".xlsx"].includes(extname(entry.name).toLowerCase()))
+    .filter((entry) => entry.isFile() && [
+      ".docx", ".docm", ".dotx", ".dotm",
+      ".pptx", ".pptm", ".potx", ".potm",
+      ".xlsx", ".xlsm", ".xltx", ".xltm",
+      ".odt", ".ods", ".odp", ".epub", ".cbz", ".zip",
+    ].includes(extname(entry.name).toLowerCase()))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
 }

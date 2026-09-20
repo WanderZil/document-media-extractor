@@ -1,12 +1,16 @@
 {
   "name": "document-media-extractor",
   "version": "0.1.0",
-  "description": "Local-first extraction of embedded media from DOCX, PPTX, and XLSX files.",
+  "description": "Local-first extraction of embedded media from document and ZIP containers.",
   "keywords": [
     "docx",
     "pptx",
     "xlsx",
     "ooxml",
+    "opendocument",
+    "epub",
+    "cbz",
+    "zip",
     "media-extraction",
     "local-first"
   ],

@@ -4,17 +4,21 @@ Extract original embedded media from local document containers without uploading
 
 ## What it supports
 
-The stable first release supports standard OOXML containers through a Node API and CLI. It is deliberately local-first: no backend, account, upload, or remote URL is involved.
+The stable release supports the local ZIP-based document and archive formats below through a Node API and CLI. It is deliberately local-first: no backend, account, upload, or remote URL is involved.
 
 | Input | Embedded media path | Provenance recorded |
 | --- | --- | --- |
-| DOCX | `word/media/` | Word accessibility descriptions, where relationship mapping is reliable |
-| PPTX | `ppt/media/` | slide number and OOXML relationship |
-| XLSX | `xl/media/` | workbook, worksheet, drawing, and OOXML relationship |
+| Word OOXML: DOCX, DOCM, DOTX, DOTM | `word/media/` | Word accessibility descriptions, where relationship mapping is reliable |
+| PowerPoint OOXML: PPTX, PPTM, POTX, POTM | `ppt/media/` | slide number and OOXML relationship |
+| Excel OOXML: XLSX, XLSM, XLTX, XLTM | `xl/media/` | workbook, worksheet, drawing, and OOXML relationship |
+| OpenDocument: ODT, ODS, ODP | embedded image paths | original archive path |
+| EPUB 2 / EPUB 3 | cover and illustration paths | original archive path |
+| CBZ | comic page paths, ordered naturally | original archive path |
+| ZIP | image files in nested folders | original archive path |
 
-Legacy binary Office formats (`.doc`, `.ppt`, `.xls`) are intentionally not supported. Convert them to OOXML first.
+Legacy binary Office formats (`.doc`, `.ppt`, `.xls`), PDF, iWork, and DRM-protected ebook formats are intentionally not supported yet. Convert legacy Office files to OOXML first.
 
-Need a no-install, browser-only workflow for one document? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), or [Excel image extractor](https://bulkimagedownload.com/excel-extract).
+Need a no-install, browser-only workflow for one file? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), [Excel image extractor](https://bulkimagedownload.com/excel-extract), [OpenDocument image extractor](https://bulkimagedownload.com/odt-extract), [EPUB image extractor](https://bulkimagedownload.com/epub-extract), [CBZ image extractor](https://bulkimagedownload.com/cbz-extract), or [ZIP image extractor](https://bulkimagedownload.com/zip-extract).
 
 ## Get started from GitHub
 
@@ -47,8 +51,8 @@ import { readFile } from "node:fs/promises";
 import { extractDocumentMedia } from "document-media-extractor";
 
 const result = await extractDocumentMedia({
-  sourceName: "brief.xlsx", // .docx, .pptx, and .xlsx are supported
-  bytes: new Uint8Array(await readFile("brief.xlsx")),
+  sourceName: "book.epub", // see the supported-format table above
+  bytes: new Uint8Array(await readFile("book.epub")),
   policy: {
     minWidth: 320,
     minPixels: 100_000,

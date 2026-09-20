@@ -1,6 +1,20 @@
 import JSZip from "jszip";
 
-export type DocumentFormat = "docx" | "pptx" | "xlsx";
+/**
+ * Formats whose original image files can be read from a local ZIP container.
+ * OOXML is the first adapter family; the remaining formats deliberately share
+ * the same local policy, manifest, and safety contract.
+ */
+export type DocumentFormat =
+  | "docx"
+  | "pptx"
+  | "xlsx"
+  | "odt"
+  | "ods"
+  | "odp"
+  | "epub"
+  | "cbz"
+  | "zip";
 
 export type MediaAsset = {
   sourcePath: string;
@@ -107,7 +121,11 @@ function mediaTypeFromName(name: string): string {
   const extension = name.split(".").at(-1)?.toLowerCase();
   const mediaTypes: Record<string, string> = {
     bmp: "image/bmp",
+    avif: "image/avif",
     gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+    ico: "image/x-icon",
     jpeg: "image/jpeg",
     jpg: "image/jpeg",
     png: "image/png",
@@ -120,9 +138,16 @@ function mediaTypeFromName(name: string): string {
 }
 
 function documentFormat(sourceName: string): DocumentFormat {
-  if (sourceName.toLowerCase().endsWith(".docx")) return "docx";
-  if (sourceName.toLowerCase().endsWith(".pptx")) return "pptx";
-  if (sourceName.toLowerCase().endsWith(".xlsx")) return "xlsx";
+  const extension = sourceName.split(".").at(-1)?.toLowerCase();
+  if (["docx", "docm", "dotx", "dotm"].includes(extension ?? "")) return "docx";
+  if (["pptx", "pptm", "potx", "potm"].includes(extension ?? "")) return "pptx";
+  if (["xlsx", "xlsm", "xltx", "xltm"].includes(extension ?? "")) return "xlsx";
+  if (extension === "odt") return "odt";
+  if (extension === "ods") return "ods";
+  if (extension === "odp") return "odp";
+  if (extension === "epub") return "epub";
+  if (extension === "cbz") return "cbz";
+  if (extension === "zip") return "zip";
   throw new Error("UNSUPPORTED_FORMAT");
 }
 
@@ -135,13 +160,61 @@ function mediaPrefix(format: DocumentFormat): string {
 function requiredDocumentPart(format: DocumentFormat): string {
   if (format === "docx") return "word/document.xml";
   if (format === "pptx") return "ppt/presentation.xml";
-  return "xl/workbook.xml";
+  if (format === "xlsx") return "xl/workbook.xml";
+  return "";
 }
 
 function invalidDocumentError(format: DocumentFormat): string {
   if (format === "docx") return "INVALID_DOCX";
   if (format === "pptx") return "INVALID_PPTX";
-  return "INVALID_XLSX";
+  if (format === "xlsx") return "INVALID_XLSX";
+  if (format === "epub") return "INVALID_EPUB";
+  if (format === "odt" || format === "ods" || format === "odp") return "INVALID_ODF";
+  return "INVALID_ARCHIVE";
+}
+
+function isOoxmlFormat(format: DocumentFormat): format is "docx" | "pptx" | "xlsx" {
+  return format === "docx" || format === "pptx" || format === "xlsx";
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\/+/g, "");
+}
+
+function isImagePath(path: string): boolean {
+  return /\.(avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/i.test(path);
+}
+
+function shouldSkipContainerPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  if (!normalized || normalized.endsWith("/")) return true;
+  const segments = normalized.split("/");
+  const name = segments.at(-1) ?? "";
+  if (name === ".DS_Store" || name === "Thumbs.db" || name.startsWith("._") || /^comicinfo\.xml$/i.test(name)) {
+    return true;
+  }
+  return segments.some((segment) => /^(?:__MACOSX|\.git|node_modules)$/i.test(segment));
+}
+
+function compareComicPageOrder(left: string, right: string): number {
+  return new Intl.Collator("en", { numeric: true, sensitivity: "base" }).compare(left, right);
+}
+
+async function hasEpubStructure(archive: JSZip): Promise<boolean> {
+  const mimetype = archive.file("mimetype");
+  if (!mimetype || !archive.file("META-INF/container.xml")) return false;
+  return (await mimetype.async("string")).trim() === "application/epub+zip";
+}
+
+async function hasOdfStructure(archive: JSZip, format: "odt" | "ods" | "odp"): Promise<boolean> {
+  const mimetype = archive.file("mimetype");
+  const content = archive.file("content.xml");
+  const expectedMimeTypes = {
+    odt: "application/vnd.oasis.opendocument.text",
+    ods: "application/vnd.oasis.opendocument.spreadsheet",
+    odp: "application/vnd.oasis.opendocument.presentation",
+  };
+  return Boolean(mimetype && content) && (await mimetype!.async("string")).trim() === expectedMimeTypes[format];
 }
 
 function assertNotCancelled(signal: AbortSignal | undefined): void {
@@ -464,17 +537,33 @@ export async function extractDocumentMedia(
 
   assertLimit(Object.keys(archive.files).length, limits.maxArchiveEntries, "LIMIT_ARCHIVE_ENTRIES");
 
-  if (!archive.file("[Content_Types].xml") || !archive.file(requiredDocumentPart(format))) {
+  if (isOoxmlFormat(format)) {
+    if (!archive.file("[Content_Types].xml") || !archive.file(requiredDocumentPart(format))) {
+      throw new Error(invalidDocumentError(format));
+    }
+  } else if (format === "epub") {
+    if (!(await hasEpubStructure(archive))) throw new Error(invalidDocumentError(format));
+  } else if (
+    (format === "odt" || format === "ods" || format === "odp") &&
+    !(await hasOdfStructure(archive, format))
+  ) {
     throw new Error(invalidDocumentError(format));
   }
 
   const mediaPaths = Object.keys(archive.files)
-    .filter((path) => path.startsWith(mediaPrefix(format)) && !archive.files[path].dir)
-    .sort();
+    .filter((path) => {
+      const entry = archive.files[path];
+      if (!entry || entry.dir) return false;
+      if (isOoxmlFormat(format)) return path.startsWith(mediaPrefix(format));
+      return !shouldSkipContainerPath(path) && isImagePath(path);
+    })
+    .sort(format === "cbz" ? compareComicPageOrder : (left, right) => left.localeCompare(right));
 
   if (mediaPaths.length === 0) throw new Error("NO_MEDIA");
   assertLimit(mediaPaths.length, limits.maxMediaCount, "LIMIT_MEDIA_COUNT");
-  const provenance = await assetProvenance(archive, format);
+  const provenance = isOoxmlFormat(format)
+    ? await assetProvenance(archive, format)
+    : { descriptions: new Map<string, string>(), references: new Map<string, OoxmlReference[]>() };
   assertNotCancelled(input.signal);
 
   const candidates = [];
