@@ -7,5 +7,7 @@ coverage/
 data/local.db
 .output/
 .nitro/
+src/paraglide/
+src/routeTree.gen.ts
 .DS_Store
 npm-debug.log*
