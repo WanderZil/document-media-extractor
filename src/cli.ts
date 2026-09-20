@@ -1,30 +1,66 @@
 #!/usr/bin/env node
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { basename, extname, resolve } from "node:path";
 
 import { extractDocumentMedia, type ExtractionPolicy } from "./index.js";
 
 type CliOptions = {
+  mode: "single" | "batch";
   inputPath: string;
   outputPath: string;
   policyPath?: string;
 };
 
 function parseCliOptions(args: string[]): CliOptions {
-  const [inputPath, ...rest] = args;
+  const mode = args[0] === "--batch" ? "batch" : "single";
+  const [inputPath, ...rest] = mode === "batch" ? args.slice(1) : args;
   const outputIndex = rest.indexOf("--out");
   const policyIndex = rest.indexOf("--policy");
   const outputPath = outputIndex >= 0 ? rest[outputIndex + 1] : undefined;
   const policyPath = policyIndex >= 0 ? rest[policyIndex + 1] : undefined;
   const expectedArgs = policyPath ? 4 : 2;
   if (!inputPath || !outputPath || outputIndex < 0 || ![2, 4].includes(rest.length) || rest.length !== expectedArgs) {
-    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx|file.xlsx> --out <directory> [--policy policy.json]");
+    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx|file.xlsx> --out <directory> [--policy policy.json]\n   or: document-media-extractor --batch <directory> --out <directory> [--policy policy.json]");
   }
-  return { inputPath, outputPath, policyPath };
+  return { mode, inputPath, outputPath, policyPath };
+}
+
+async function createOutputDirectory(outputPath: string): Promise<string> {
+  const destination = resolve(outputPath);
+  try {
+    await access(destination);
+    throw new Error("OUTPUT_DIRECTORY_EXISTS");
+  } catch (error) {
+    if (error instanceof Error && error.message === "OUTPUT_DIRECTORY_EXISTS") throw error;
+  }
+  await mkdir(destination);
+  return destination;
+}
+
+async function writeResult(destination: string, result: Awaited<ReturnType<typeof extractDocumentMedia>>): Promise<void> {
+  const outputNames = result.assets.map((asset) => asset.exportName);
+  if (new Set(outputNames).size !== outputNames.length || outputNames.includes("manifest.json")) {
+    throw new Error("OUTPUT_NAME_COLLISION");
+  }
+  await Promise.all(result.assets.map((asset) => writeFile(resolve(destination, asset.exportName), asset.bytes)));
+  await writeFile(resolve(destination, "manifest.json"), `${JSON.stringify(result.manifest, null, 2)}\n`);
+}
+
+function batchFolderName(inputName: string, index: number): string {
+  const safeStem = basename(inputName, extname(inputName)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
+  return `${String(index).padStart(3, "0")}-${safeStem}`;
+}
+
+async function supportedFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && [".docx", ".pptx", ".xlsx"].includes(extname(entry.name).toLowerCase()))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 export async function runCli(args: string[]): Promise<void> {
-  const { inputPath, outputPath, policyPath } = parseCliOptions(args);
+  const { mode, inputPath, outputPath, policyPath } = parseCliOptions(args);
   let policy: ExtractionPolicy | undefined;
   if (policyPath) {
     try {
@@ -33,27 +69,39 @@ export async function runCli(args: string[]): Promise<void> {
       throw new Error("INVALID_POLICY");
     }
   }
-  const result = await extractDocumentMedia({
-    sourceName: basename(inputPath),
-    bytes: new Uint8Array(await readFile(inputPath)),
-    policy,
-  });
-  const destination = resolve(outputPath);
-  try {
-    await access(destination);
-    throw new Error("OUTPUT_DIRECTORY_EXISTS");
-  } catch (error) {
-    if (error instanceof Error && error.message === "OUTPUT_DIRECTORY_EXISTS") throw error;
+  if (mode === "single") {
+    const result = await extractDocumentMedia({
+      sourceName: basename(inputPath),
+      bytes: new Uint8Array(await readFile(inputPath)),
+      policy,
+    });
+    const destination = await createOutputDirectory(outputPath);
+    await writeResult(destination, result);
+    return;
   }
-  const outputNames = result.assets.map((asset) => asset.exportName);
-  if (new Set(outputNames).size !== outputNames.length || outputNames.includes("manifest.json")) {
-    throw new Error("OUTPUT_NAME_COLLISION");
+
+  const names = await supportedFiles(inputPath);
+  if (names.length === 0) throw new Error("NO_SUPPORTED_INPUTS");
+  const destination = await createOutputDirectory(outputPath);
+  const items: Array<Record<string, string>> = [];
+  for (const [index, name] of names.entries()) {
+    const outputDirectory = batchFolderName(name, index + 1);
+    try {
+      const result = await extractDocumentMedia({
+        sourceName: name,
+        bytes: new Uint8Array(await readFile(resolve(inputPath, name))),
+        policy,
+      });
+      await mkdir(resolve(destination, outputDirectory));
+      await writeResult(resolve(destination, outputDirectory), result);
+      items.push({ inputName: name, outputDirectory, status: "success" });
+    } catch (error) {
+      items.push({ inputName: name, outputDirectory, status: "failure", error: error instanceof Error ? error.message : "UNKNOWN_ERROR" });
+    }
   }
-  await mkdir(destination);
-  await Promise.all(result.assets.map((asset) => writeFile(resolve(destination, asset.exportName), asset.bytes)));
   await writeFile(
-    resolve(destination, "manifest.json"),
-    `${JSON.stringify(result.manifest, null, 2)}\n`,
+    resolve(destination, "batch-manifest.json"),
+    `${JSON.stringify({ policy: policy ?? {}, items }, null, 2)}\n`,
   );
 }
 

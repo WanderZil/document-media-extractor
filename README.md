@@ -32,6 +32,12 @@ For a policy file:
 node dist/cli.js ./brief.xlsx --out ./extracted --policy ./policy.json
 ```
 
+To process every supported document directly inside one folder (non-recursive), use batch mode. Each successful input gets its own numbered output folder, and `batch-manifest.json` records both successes and isolated failures.
+
+```sh
+node dist/cli.js --batch ./documents --out ./extracted-batch --policy ./policy.json
+```
+
 ## Node API
 
 ```ts

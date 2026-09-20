@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -70,6 +70,38 @@ test("CLI refuses to overwrite an existing output directory", async () => {
         ]),
       /OUTPUT_DIRECTORY_EXISTS/,
     );
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("CLI batch mode isolates failures and writes one output folder per supported document", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "document-media-extractor-"));
+  const inputDirectory = join(directory, "inputs");
+  const outputPath = join(directory, "output");
+  const archive = new JSZip();
+  archive.file("[Content_Types].xml", "<Types />");
+  archive.file("word/document.xml", "<w:document />");
+  archive.file("word/media/cover.png", PNG_BYTES);
+  await mkdir(inputDirectory);
+  await writeFile(join(inputDirectory, "brief.docx"), await archive.generateAsync({ type: "uint8array" }));
+  await writeFile(join(inputDirectory, "empty.pptx"), await new JSZip().generateAsync({ type: "uint8array" }));
+  await writeFile(join(inputDirectory, "ignored.txt"), "not an OOXML document");
+
+  try {
+    await execFile(join(process.cwd(), "node_modules/.bin/tsx"), [
+      "src/cli.ts",
+      "--batch",
+      inputDirectory,
+      "--out",
+      outputPath,
+    ]);
+    const batchManifest = JSON.parse(await readFile(join(outputPath, "batch-manifest.json"), "utf8"));
+    assert.deepEqual(batchManifest.items, [
+      { inputName: "brief.docx", outputDirectory: "001-brief", status: "success" },
+      { inputName: "empty.pptx", outputDirectory: "002-empty", status: "failure", error: "INVALID_PPTX" },
+    ]);
+    assert.deepEqual(new Uint8Array(await readFile(join(outputPath, "001-brief", "cover.png"))), PNG_BYTES);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
