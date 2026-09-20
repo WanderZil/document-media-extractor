@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { extractDocumentMedia, type ExtractionPolicy } from "./index.js";
 
@@ -110,7 +112,16 @@ export async function runCli(args: string[]): Promise<void> {
   );
 }
 
-if (import.meta.url === new URL(process.argv[1], "file:").href) {
+export function isCliEntrypoint(importMetaUrl: string, invocationPath: string | undefined): boolean {
+  if (!invocationPath) return false;
+  try {
+    return realpathSync(invocationPath) === fileURLToPath(importMetaUrl);
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint(import.meta.url, process.argv[1])) {
   runCli(process.argv.slice(2)).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : "UNKNOWN_ERROR");
     process.exitCode = 1;

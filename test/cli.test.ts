@@ -1,14 +1,28 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import JSZip from "jszip";
 
+import { isCliEntrypoint } from "../src/cli.js";
+
 const execFile = promisify(execFileCallback);
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
+test("recognizes the npm bin symlink as the CLI entrypoint", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "document-media-extractor-bin-"));
+  const source = join(process.cwd(), "src", "cli.ts");
+  const bin = join(directory, "document-media-extractor");
+  try {
+    await symlink(source, bin);
+    assert.equal(isCliEntrypoint(new URL("../src/cli.ts", import.meta.url).href, bin), true);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
 
 test("CLI writes original media and a manifest for a local DOCX", async () => {
   const directory = await mkdtemp(join(tmpdir(), "document-media-extractor-"));
