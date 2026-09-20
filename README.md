@@ -18,7 +18,7 @@ The stable release supports the local ZIP-based document and archive formats bel
 
 Legacy binary Office formats (`.doc`, `.ppt`, `.xls`), PDF, iWork, and DRM-protected ebook formats are intentionally not supported yet. Convert legacy Office files to OOXML first.
 
-Need a no-install, browser-only workflow for one file? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), [Excel image extractor](https://bulkimagedownload.com/excel-extract), [OpenDocument image extractor](https://bulkimagedownload.com/odt-extract), [EPUB image extractor](https://bulkimagedownload.com/epub-extract), [CBZ image extractor](https://bulkimagedownload.com/cbz-extract), or [ZIP image extractor](https://bulkimagedownload.com/zip-extract).
+Need a no-install, browser-only workflow for one Office document? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), or [Excel image extractor](https://bulkimagedownload.com/excel-extract). Browser-only equivalents for OpenDocument, EPUB, CBZ, and ZIP archives are available on the same site.
 
 ## Get started from GitHub
 
