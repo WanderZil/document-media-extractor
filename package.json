@@ -5,8 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm review:build && tsc -p tsconfig.build.json",
     "fixtures": "tsx scripts/build-fixtures.ts",
+    "review:build": "esbuild review/app.js --bundle --format=iife --minify --outfile=review/app.bundle.js && perl -pi -e 's/[ \\t]+$//' review/app.bundle.js",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit"
   },
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.25.12",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0"
   }

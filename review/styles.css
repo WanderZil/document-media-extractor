@@ -19,6 +19,8 @@ h1 { margin: 8px 0 14px; font-size: clamp(2rem, 5vw, 3.75rem); letter-spacing: -
 #status { color: #5c6068; margin-bottom: 0; }
 code { padding: .12rem .32rem; border-radius: 4px; background: #eef0f3; }
 .summary { display: flex; gap: 42px; flex-wrap: wrap; }
+.summary .actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.secondary-button { padding: 9px 12px; border: 1px solid #cfd4dc; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font-weight: 650; }
 .summary strong { display: block; font-size: 1.5rem; }
 .summary span { color: #5c6068; font-size: .85rem; }
 .groups h2 { margin: 0 0 8px; font-size: 1rem; }
@@ -30,6 +32,7 @@ code { padding: .12rem .32rem; border-radius: 4px; background: #eef0f3; }
 .preview img { width: 100%; height: 100%; object-fit: contain; }
 .asset-copy { padding: 13px; }
 .asset h3 { overflow: hidden; margin: 0 0 7px; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; }
+.asset label { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; font-size: .78rem; font-weight: 700; }
 .meta { margin: 0; color: #626873; font-size: .78rem; line-height: 1.5; }
 .badge { display: inline-block; margin-top: 8px; padding: 3px 7px; border-radius: 99px; background: #edf0ff; color: #3d3195; font-size: .72rem; font-weight: 700; }
 .missing { color: #737882; font-size: .8rem; text-align: center; padding: 12px; }

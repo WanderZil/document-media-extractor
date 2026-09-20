@@ -55,7 +55,7 @@ This writes the extracted media and `manifest.json` to the chosen directory.
 
 ## Local review UI
 
-Open [`review/index.html`](review/index.html) in a modern Chromium browser, then choose a CLI output folder. The UI reads `manifest.json` and the exported files directly from the local file picker. It uses Canvas dHash to mark possible visual matches among browser-decodable images; these are review hints only and never remove or upload files.
+Open [`review/index.html`](review/index.html) in a modern Chromium browser, then choose a CLI output folder. The UI reads `manifest.json` and the exported files directly from the local file picker. It uses Canvas dHash to mark possible visual matches among browser-decodable images; these are review hints only and never remove or upload files. Reviewers can select retained assets and download a new ZIP containing the original files plus a review annotation in its Manifest.
 
 For the most useful review, extract with the default preservation policy so all media remains available to inspect.
 
