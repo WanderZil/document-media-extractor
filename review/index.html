@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Document Media Extractor — Local review</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">LOCAL REVIEW</p>
+        <h1>Review extracted media</h1>
+        <p class="intro">
+          Choose the output folder created by the CLI. Files remain in this browser; nothing is uploaded.
+        </p>
+      </header>
+
+      <section class="loader" aria-labelledby="choose-folder">
+        <h2 id="choose-folder">Choose an extraction folder</h2>
+        <label class="upload-button" for="folder-input">Choose folder</label>
+        <input id="folder-input" type="file" webkitdirectory multiple />
+        <p id="status" role="status">Waiting for a folder containing <code>manifest.json</code>.</p>
+      </section>
+
+      <section id="summary" class="summary" hidden></section>
+      <section id="groups" class="groups" hidden aria-live="polite"></section>
+      <section id="grid" class="grid" hidden></section>
+    </main>
+  </body>
+</html>

@@ -4,7 +4,7 @@ Extract original embedded media from local Office documents without uploading fi
 
 ## Phase 1 status
 
-The development build supports standard DOCX, PPTX, and XLSX extraction through a Node API and CLI, including local filtering, exact-content duplicate policy, SHA-256 provenance, deterministic names, and a decision-bearing Manifest. Visual duplicate review and the static local review UI are planned next.
+The development build supports standard DOCX, PPTX, and XLSX extraction through a Node API and CLI, including local filtering, exact-content duplicate policy, SHA-256 provenance, deterministic names, bounded batches, and a decision-bearing Manifest. A static browser review surface is included for manual visual review.
 
 ## Node API
 
@@ -52,6 +52,12 @@ pnpm exec tsx src/cli.ts brief.xlsx --out ./extracted
 ```
 
 This writes the extracted media and `manifest.json` to the chosen directory.
+
+## Local review UI
+
+Open [`review/index.html`](review/index.html) in a modern Chromium browser, then choose a CLI output folder. The UI reads `manifest.json` and the exported files directly from the local file picker. It uses Canvas dHash to mark possible visual matches among browser-decodable images; these are review hints only and never remove or upload files.
+
+For the most useful review, extract with the default preservation policy so all media remains available to inspect.
 
 ## Scope and privacy
 

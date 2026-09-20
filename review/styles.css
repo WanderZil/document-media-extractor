@@ -1,0 +1,42 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #1b1d20;
+  background: #f6f7f8;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+main { max-width: 1180px; margin: 0 auto; padding: 56px 24px 80px; }
+header { max-width: 720px; }
+.eyebrow { color: #5b43d6; font-size: .75rem; font-weight: 750; letter-spacing: .12em; }
+h1 { margin: 8px 0 14px; font-size: clamp(2rem, 5vw, 3.75rem); letter-spacing: -.05em; }
+.intro { color: #5c6068; font-size: 1.1rem; line-height: 1.6; }
+.loader, .summary, .groups { margin-top: 36px; padding: 24px; border: 1px solid #dce0e5; border-radius: 16px; background: #fff; }
+.loader h2 { margin-top: 0; font-size: 1rem; }
+.upload-button { display: inline-block; padding: 11px 15px; border-radius: 9px; background: #2a245e; color: #fff; cursor: pointer; font-weight: 650; }
+#folder-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+#status { color: #5c6068; margin-bottom: 0; }
+code { padding: .12rem .32rem; border-radius: 4px; background: #eef0f3; }
+.summary { display: flex; gap: 42px; flex-wrap: wrap; }
+.summary strong { display: block; font-size: 1.5rem; }
+.summary span { color: #5c6068; font-size: .85rem; }
+.groups h2 { margin: 0 0 8px; font-size: 1rem; }
+.groups p { margin: 0; color: #5c6068; line-height: 1.5; }
+.group-list { margin: 14px 0 0; padding-left: 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 18px; margin-top: 26px; }
+.asset { overflow: hidden; border: 1px solid #dce0e5; border-radius: 14px; background: #fff; }
+.preview { display: grid; place-items: center; height: 158px; background: #e9ecf1; }
+.preview img { width: 100%; height: 100%; object-fit: contain; }
+.asset-copy { padding: 13px; }
+.asset h3 { overflow: hidden; margin: 0 0 7px; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; }
+.meta { margin: 0; color: #626873; font-size: .78rem; line-height: 1.5; }
+.badge { display: inline-block; margin-top: 8px; padding: 3px 7px; border-radius: 99px; background: #edf0ff; color: #3d3195; font-size: .72rem; font-weight: 700; }
+.missing { color: #737882; font-size: .8rem; text-align: center; padding: 12px; }
+@media (prefers-color-scheme: dark) {
+  :root { color: #ecedf0; background: #17181b; }
+  .loader, .summary, .groups, .asset { border-color: #383b42; background: #202125; }
+  .intro, #status, .summary span, .groups p, .meta { color: #b6bac3; }
+  .preview { background: #292c31; }
+  code { background: #30333a; }
+}
