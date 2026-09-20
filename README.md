@@ -1,6 +1,6 @@
 # Document Media Extractor
 
-Extract original embedded media from local Office documents without uploading files or running a backend.
+Extract original embedded media from local document containers without uploading files or running a backend. The current release supports OOXML Office documents.
 
 ## What it supports
 
@@ -19,8 +19,8 @@ Need a no-install, browser-only workflow for one document? Use the matching loca
 ## Get started from GitHub
 
 ```sh
-git clone https://github.com/WanderZil/ooxml-media-extractor.git
-cd ooxml-media-extractor
+git clone https://github.com/WanderZil/document-media-extractor.git
+cd document-media-extractor
 pnpm install
 pnpm build
 node dist/cli.js ./brief.docx --out ./extracted
