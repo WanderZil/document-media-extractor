@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 
-export type DocumentFormat = "docx" | "pptx";
+export type DocumentFormat = "docx" | "pptx" | "xlsx";
 
 export type MediaAsset = {
   sourcePath: string;
@@ -65,6 +65,9 @@ export type OoxmlReference = {
   partPath: string;
   relationshipId: string;
   slideNumber?: number;
+  workbookPartPath?: string;
+  worksheetName?: string;
+  worksheetPartPath?: string;
 };
 
 export type ExtractionManifest = {
@@ -104,19 +107,26 @@ function mediaTypeFromName(name: string): string {
 function documentFormat(sourceName: string): DocumentFormat {
   if (sourceName.toLowerCase().endsWith(".docx")) return "docx";
   if (sourceName.toLowerCase().endsWith(".pptx")) return "pptx";
+  if (sourceName.toLowerCase().endsWith(".xlsx")) return "xlsx";
   throw new Error("UNSUPPORTED_FORMAT");
 }
 
 function mediaPrefix(format: DocumentFormat): string {
-  return format === "docx" ? "word/media/" : "ppt/media/";
+  if (format === "docx") return "word/media/";
+  if (format === "pptx") return "ppt/media/";
+  return "xl/media/";
 }
 
 function requiredDocumentPart(format: DocumentFormat): string {
-  return format === "docx" ? "word/document.xml" : "ppt/presentation.xml";
+  if (format === "docx") return "word/document.xml";
+  if (format === "pptx") return "ppt/presentation.xml";
+  return "xl/workbook.xml";
 }
 
 function invalidDocumentError(format: DocumentFormat): string {
-  return format === "docx" ? "INVALID_DOCX" : "INVALID_PPTX";
+  if (format === "docx") return "INVALID_DOCX";
+  if (format === "pptx") return "INVALID_PPTX";
+  return "INVALID_XLSX";
 }
 
 function pngDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
@@ -239,6 +249,29 @@ function resolveRelationshipTarget(partPath: string, target: string): string {
   return resolved.join("/");
 }
 
+function relationshipPartPath(partPath: string): string {
+  const segments = partPath.split("/");
+  const filename = segments.pop();
+  return `${segments.join("/")}/_rels/${filename}.rels`;
+}
+
+async function relationshipTargets(
+  archive: JSZip,
+  partPath: string,
+): Promise<Map<string, string>> {
+  const relationships = archive.file(relationshipPartPath(partPath));
+  if (!relationships) return new Map();
+
+  const targets = new Map<string, string>();
+  const relationshipText = await relationships.async("string");
+  for (const tag of relationshipText.match(/<Relationship\b[^>]*>/gi) ?? []) {
+    const id = attribute(tag, "Id");
+    const target = attribute(tag, "Target");
+    if (id && target) targets.set(id, resolveRelationshipTarget(partPath, target));
+  }
+  return targets;
+}
+
 async function accessibleDescriptions(archive: JSZip): Promise<Map<string, string>> {
   const document = archive.file("word/document.xml");
   const relationships = archive.file("word/_rels/document.xml.rels");
@@ -278,17 +311,8 @@ async function pptxProvenance(archive: JSZip): Promise<AssetProvenance> {
 
   for (const partPath of slidePaths) {
     const slide = archive.files[partPath];
-    const relationshipPath = partPath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
-    const relationships = archive.file(relationshipPath);
-    if (!slide || !relationships) continue;
-
-    const targetById = new Map<string, string>();
-    const relationshipText = await relationships.async("string");
-    for (const tag of relationshipText.match(/<Relationship\b[^>]*>/gi) ?? []) {
-      const id = attribute(tag, "Id");
-      const target = attribute(tag, "Target");
-      if (id && target) targetById.set(id, resolveRelationshipTarget(partPath, target));
-    }
+    if (!slide) continue;
+    const targetById = await relationshipTargets(archive, partPath);
 
     const slideNumber = Number(/slide(\d+)\.xml$/i.exec(partPath)?.[1]);
     const slideText = await slide.async("string");
@@ -311,8 +335,62 @@ async function pptxProvenance(archive: JSZip): Promise<AssetProvenance> {
   return { descriptions, references };
 }
 
+async function xlsxProvenance(archive: JSZip): Promise<AssetProvenance> {
+  const descriptions = new Map<string, string>();
+  const references = new Map<string, OoxmlReference[]>();
+  const workbookPath = "xl/workbook.xml";
+  const workbook = archive.file(workbookPath);
+  if (!workbook) return { descriptions, references };
+
+  const worksheetPathById = await relationshipTargets(archive, workbookPath);
+  const workbookText = await workbook.async("string");
+  for (const sheetTag of workbookText.match(/<sheet\b[^>]*>/gi) ?? []) {
+    const relationshipId = attribute(sheetTag, "r:id");
+    const worksheetName = attribute(sheetTag, "name");
+    const worksheetPartPath = relationshipId ? worksheetPathById.get(relationshipId) : undefined;
+    if (!worksheetPartPath || !worksheetName) continue;
+
+    const worksheet = archive.file(worksheetPartPath);
+    if (!worksheet) continue;
+    const worksheetText = await worksheet.async("string");
+    const drawingId = worksheetText.match(/<drawing\b[^>]*\br:id\s*=\s*(["'])(.*?)\1/i)?.[2];
+    if (!drawingId) continue;
+
+    const drawingPartPath = (await relationshipTargets(archive, worksheetPartPath)).get(drawingId);
+    const drawing = drawingPartPath ? archive.file(drawingPartPath) : undefined;
+    if (!drawing || !drawingPartPath) continue;
+    const mediaPathById = await relationshipTargets(archive, drawingPartPath);
+    const drawingText = await drawing.async("string");
+    for (
+      const anchor of drawingText.match(
+        /<xdr:(?:twoCellAnchor|oneCellAnchor|absoluteAnchor)\b[\s\S]*?<\/xdr:(?:twoCellAnchor|oneCellAnchor|absoluteAnchor)>/gi,
+      ) ?? []
+    ) {
+      const properties = anchor.match(/<xdr:cNvPr\b[^>]*>/i)?.[0];
+      const embedId = anchor.match(/<a:blip\b[^>]*\br:embed\s*=\s*(["'])(.*?)\1/i)?.[2];
+      const mediaPath = embedId ? mediaPathById.get(embedId) : undefined;
+      if (!embedId || !mediaPath) continue;
+
+      const existing = references.get(mediaPath) ?? [];
+      existing.push({
+        partPath: drawingPartPath,
+        relationshipId: embedId,
+        workbookPartPath: workbookPath,
+        worksheetName,
+        worksheetPartPath,
+      });
+      references.set(mediaPath, existing);
+
+      const description = properties ? attribute(properties, "descr") : undefined;
+      if (description && !descriptions.has(mediaPath)) descriptions.set(mediaPath, description);
+    }
+  }
+  return { descriptions, references };
+}
+
 async function assetProvenance(archive: JSZip, format: DocumentFormat): Promise<AssetProvenance> {
   if (format === "pptx") return pptxProvenance(archive);
+  if (format === "xlsx") return xlsxProvenance(archive);
   return { descriptions: await accessibleDescriptions(archive), references: new Map() };
 }
 

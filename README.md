@@ -4,7 +4,7 @@ Extract original embedded media from local Office documents without uploading fi
 
 ## Phase 1 status
 
-The development build supports standard DOCX and PPTX extraction through a Node API and CLI, including local filtering, exact-content duplicate policy, SHA-256 provenance, deterministic names, and a decision-bearing Manifest. XLSX, visual duplicate review, and the static local review UI are planned next.
+The development build supports standard DOCX, PPTX, and XLSX extraction through a Node API and CLI, including local filtering, exact-content duplicate policy, SHA-256 provenance, deterministic names, and a decision-bearing Manifest. Visual duplicate review and the static local review UI are planned next.
 
 ## Node API
 
@@ -13,8 +13,8 @@ import { readFile } from "node:fs/promises";
 import { extractDocumentMedia } from "document-media-extractor";
 
 const result = await extractDocumentMedia({
-  sourceName: "brief.pptx", // .docx and .pptx are supported
-  bytes: new Uint8Array(await readFile("brief.pptx")),
+  sourceName: "brief.xlsx", // .docx, .pptx, and .xlsx are supported
+  bytes: new Uint8Array(await readFile("brief.xlsx")),
   policy: {
     minWidth: 320,
     minPixels: 100_000,
@@ -31,7 +31,7 @@ const result = await extractDocumentMedia({
 ## Development CLI
 
 ```sh
-pnpm exec tsx src/cli.ts brief.pptx --out ./extracted
+pnpm exec tsx src/cli.ts brief.xlsx --out ./extracted
 ```
 
 This writes the extracted media and `manifest.json` to the chosen directory.

@@ -82,6 +82,60 @@ async function createPptx(name: string, includeMedia: boolean): Promise<void> {
   await writeFile(join(fixtureDirectory, name), await archive.generateAsync({ type: "uint8array" }));
 }
 
+async function createXlsx(name: string, includeMedia: boolean): Promise<void> {
+  const archive = new JSZip();
+  const repeated = png(400, 200, 1);
+  archive.file("[Content_Types].xml", "<Types />", FIXTURE_FILE_OPTIONS);
+  archive.file(
+    "xl/workbook.xml",
+    `<workbook><sheets><sheet name="Overview" r:id="rId1" /><sheet name="Archive" r:id="rId2" /></sheets></workbook>`,
+    FIXTURE_FILE_OPTIONS,
+  );
+  if (includeMedia) {
+    archive.file(
+      "xl/_rels/workbook.xml.rels",
+      `<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml" /><Relationship Id="rId2" Target="worksheets/sheet2.xml" /></Relationships>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file("xl/worksheets/sheet1.xml", `<worksheet><drawing r:id="rId1" /></worksheet>`, FIXTURE_FILE_OPTIONS);
+    archive.file("xl/worksheets/sheet2.xml", `<worksheet><drawing r:id="rId2" /></worksheet>`, FIXTURE_FILE_OPTIONS);
+    archive.file(
+      "xl/worksheets/_rels/sheet1.xml.rels",
+      `<Relationships><Relationship Id="rId1" Target="../drawings/drawing1.xml" /></Relationships>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file(
+      "xl/worksheets/_rels/sheet2.xml.rels",
+      `<Relationships><Relationship Id="rId2" Target="../drawings/drawing2.xml" /></Relationships>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file(
+      "xl/drawings/drawing1.xml",
+      `<xdr:wsDr><xdr:twoCellAnchor><xdr:cNvPr descr="Revenue chart" /><a:blip r:embed="rId1" /></xdr:twoCellAnchor></xdr:wsDr>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file(
+      "xl/drawings/drawing2.xml",
+      `<xdr:wsDr><xdr:twoCellAnchor><xdr:cNvPr descr="" /><a:blip r:embed="rId2" /></xdr:twoCellAnchor></xdr:wsDr>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file(
+      "xl/drawings/_rels/drawing1.xml.rels",
+      `<Relationships><Relationship Id="rId1" Target="../media/copy.png" /></Relationships>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file(
+      "xl/drawings/_rels/drawing2.xml.rels",
+      `<Relationships><Relationship Id="rId2" Target="../media/hero image.png" /></Relationships>`,
+      FIXTURE_FILE_OPTIONS,
+    );
+    archive.file("xl/media/copy.png", repeated, FIXTURE_FILE_OPTIONS);
+    archive.file("xl/media/hero image.png", repeated, FIXTURE_FILE_OPTIONS);
+    archive.file("xl/media/small.png", png(10, 10, 2), FIXTURE_FILE_OPTIONS);
+  }
+  await writeFile(join(fixtureDirectory, name), await archive.generateAsync({ type: "uint8array" }));
+}
+
 await mkdir(fixtureDirectory, { recursive: true });
 await createDocx("ordinary.docx", true);
 await createDocx("empty.docx", false);
@@ -90,3 +144,6 @@ await writeFile(join(fixtureDirectory, "malformed.docx"), PNG_BYTES);
 await createPptx("presentation.pptx", true);
 await createPptx("empty.pptx", false);
 await writeFile(join(fixtureDirectory, "malformed.pptx"), PNG_BYTES);
+await createXlsx("workbook.xlsx", true);
+await createXlsx("empty.xlsx", false);
+await writeFile(join(fixtureDirectory, "malformed.xlsx"), PNG_BYTES);
