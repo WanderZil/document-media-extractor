@@ -14,6 +14,8 @@ The stable first release supports standard OOXML containers through a Node API a
 
 Legacy binary Office formats (`.doc`, `.ppt`, `.xls`) are intentionally not supported. Convert them to OOXML first.
 
+Need a no-install, browser-only workflow for one document? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), or [Excel image extractor](https://bulkimagedownload.com/excel-extract).
+
 ## Get started from GitHub
 
 ```sh
