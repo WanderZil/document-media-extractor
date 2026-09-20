@@ -166,8 +166,36 @@ function pngDimensions(bytes: Uint8Array): { width: number; height: number } | u
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
+function gifDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
+  const header = String.fromCharCode(...bytes.slice(0, 6));
+  if (bytes.byteLength < 10 || (header !== "GIF87a" && header !== "GIF89a")) return undefined;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint16(6, true), height: view.getUint16(8, true) };
+}
+
+function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
+  if (bytes.byteLength < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return undefined;
+  let offset = 2;
+  while (offset + 8 <= bytes.byteLength) {
+    if (bytes[offset] !== 0xff) return undefined;
+    while (bytes[offset] === 0xff) offset += 1;
+    const marker = bytes[offset++];
+    if (marker === 0xd9 || marker === 0xda) return undefined;
+    if (offset + 2 > bytes.byteLength) return undefined;
+    const length = (bytes[offset] << 8) | bytes[offset + 1];
+    if (length < 2 || offset + length > bytes.byteLength) return undefined;
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+      return { width: (bytes[offset + 5] << 8) | bytes[offset + 6], height: (bytes[offset + 3] << 8) | bytes[offset + 4] };
+    }
+    offset += length;
+  }
+  return undefined;
+}
+
 function dimensionsFor(mediaType: string, bytes: Uint8Array): { width: number; height: number } | undefined {
   if (mediaType === "image/png") return pngDimensions(bytes);
+  if (mediaType === "image/gif") return gifDimensions(bytes);
+  if (mediaType === "image/jpeg") return jpegDimensions(bytes);
   return undefined;
 }
 

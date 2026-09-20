@@ -24,6 +24,14 @@ function png(width: number, height: number, suffix: number): Uint8Array {
   return bytes;
 }
 
+function gif(width: number, height: number): Uint8Array {
+  return new Uint8Array([71, 73, 70, 56, 57, 97, width & 255, width >> 8, height & 255, height >> 8]);
+}
+
+function jpeg(width: number, height: number): Uint8Array {
+  return new Uint8Array([255, 216, 255, 192, 0, 17, 8, height >> 8, height & 255, width >> 8, width & 255, 3, 1, 17, 0, 2, 17, 0, 3, 17, 0, 255, 217]);
+}
+
 test("extracts original DOCX media and reports its provenance", async () => {
   const result = await extractDocumentMedia({
     sourceName: "launch-plan.docx",
@@ -110,6 +118,27 @@ test("applies filters, exact duplicate policy, and deterministic names with audi
   assert.equal(result.manifest.assets[0].width, 400);
   assert.equal(result.manifest.assets[0].height, 200);
   assert.match(result.manifest.assets[0].sha256, /^[a-f0-9]{64}$/);
+});
+
+test("measures PNG, GIF, and JPEG dimensions for the common filter contract", async () => {
+  const archive = new JSZip();
+  archive.file("[Content_Types].xml", "<Types />");
+  archive.file("word/document.xml", "<w:document />");
+  archive.file("word/media/animated.gif", gif(120, 40));
+  archive.file("word/media/photo.jpg", jpeg(320, 240));
+  archive.file("word/media/graphic.png", png(200, 100, 7));
+
+  const result = await extractDocumentMedia({
+    sourceName: "formats.docx",
+    bytes: await archive.generateAsync({ type: "uint8array" }),
+    policy: { minWidth: 100 },
+  });
+
+  assert.deepEqual(result.manifest.assets.map((asset) => [asset.originalName, asset.width, asset.height, asset.reason]), [
+    ["animated.gif", 120, 40, "INCLUDED"],
+    ["graphic.png", 200, 100, "INCLUDED"],
+    ["photo.jpg", 320, 240, "INCLUDED"],
+  ]);
 });
 
 test("uses a mapped OOXML accessibility description and otherwise falls back to the media name", async () => {

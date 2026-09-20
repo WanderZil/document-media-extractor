@@ -4,6 +4,7 @@ const summary = document.querySelector("#summary");
 const groups = document.querySelector("#groups");
 const grid = document.querySelector("#grid");
 let reviewState;
+const MAX_VISUAL_CANDIDATES = 250;
 
 folderInput.addEventListener("change", async () => {
   const files = Array.from(folderInput.files || []);
@@ -12,11 +13,26 @@ folderInput.addEventListener("change", async () => {
 
   try {
     const manifest = JSON.parse(await manifestFile.text());
+    if (!manifest || !Array.isArray(manifest.assets) || typeof manifest.sourceName !== "string") {
+      throw new Error("manifest.json does not match the extractor Manifest format.");
+    }
+    releaseObjectUrls();
     const fileByName = new Map(files.map((file) => [file.name, file]));
-    const assets = manifest.assets.filter((asset) => asset.included);
-    status.textContent = `Loaded ${manifest.sourceName}. Calculating local visual similarity…`;
-    const previewAssets = await Promise.all(assets.map((asset) => hydrateAsset(asset, fileByName.get(asset.exportName))));
-    reviewState = { manifest, assets: previewAssets.map((asset) => ({ ...asset, selected: true })) };
+    const assets = manifest.assets.filter(isManifestAsset);
+    const visualAssets = assets.filter((asset) => asset.included).slice(0, MAX_VISUAL_CANDIDATES);
+    status.textContent = `Loaded ${manifest.sourceName}. Calculating local visual similarity for up to ${MAX_VISUAL_CANDIDATES} retained assets…`;
+    const previewByPath = new Map(await Promise.all(visualAssets.map(async (asset) => {
+      const hydrated = await hydrateAsset(asset, fileByName.get(asset.exportName));
+      return [asset.sourcePath, hydrated];
+    })));
+    reviewState = {
+      manifest,
+      assets: assets.map((asset) => ({
+        ...asset,
+        ...(previewByPath.get(asset.sourcePath) || { file: undefined, hash: null, url: null }),
+        selected: Boolean(asset.included && previewByPath.get(asset.sourcePath)?.file),
+      })),
+    };
     render();
   } catch (error) {
     showError(error instanceof Error ? error.message : "Could not read manifest.json.");
@@ -30,6 +46,16 @@ async function hydrateAsset(asset, file) {
     return { ...asset, file, url, hash: await perceptualHash(url) };
   } catch {
     return { ...asset, file, url, hash: null };
+  }
+}
+
+function isManifestAsset(asset) {
+  return asset && typeof asset === "object" && typeof asset.sourcePath === "string" && typeof asset.originalName === "string" && typeof asset.mediaType === "string" && typeof asset.byteSize === "number" && typeof asset.included === "boolean" && typeof asset.reason === "string";
+}
+
+function releaseObjectUrls() {
+  for (const asset of reviewState?.assets || []) {
+    if (asset.url) URL.revokeObjectURL(asset.url);
   }
 }
 
@@ -81,24 +107,27 @@ function similarGroups(assets) {
 function render() {
   const { manifest, assets } = reviewState;
   const visualGroups = similarGroups(assets);
+  const retained = assets.filter((asset) => asset.included).length;
+  const visuallyCompared = assets.filter((asset) => asset.hash).length;
   summary.hidden = false;
   groups.hidden = false;
   grid.hidden = false;
-  summary.innerHTML = `<div><strong>${assets.length}</strong><span>retained assets</span></div><div><strong>${manifest.assets.length}</strong><span>discovered in Manifest</span></div><div><strong>${visualGroups.length}</strong><span>possible visual groups</span></div><div class="actions"><button id="select-all" class="secondary-button" type="button">Select all</button><button id="export-zip" class="upload-button" type="button">Download selected ZIP</button></div>`;
+  summary.innerHTML = `<div><strong>${retained}</strong><span>retained assets</span></div><div><strong>${manifest.assets.length}</strong><span>discovered in Manifest</span></div><div><strong>${visualGroups.length}</strong><span>possible visual groups</span></div><div class="actions"><button id="select-all" class="secondary-button" type="button">Select all retained</button><button id="export-zip" class="upload-button" type="button">Download selected ZIP</button></div>`;
   groups.innerHTML = visualGroups.length
     ? `<h2>Possible visual matches</h2><p>These are Canvas dHash candidates (Hamming distance ≤ 8). They are review hints only; no file is removed.</p><ul class="group-list">${visualGroups.map((group) => `<li>${group.map((asset) => escapeHtml(asset.exportName)).join(" · ")}</li>`).join("")}</ul>`
-    : `<h2>No visual match candidates</h2><p>Only browser-decodable images are compared. The core extractor remains the source of truth for exact-byte duplicates.</p>`;
-  grid.innerHTML = assets.map((asset) => `<article class="asset"><div class="preview">${asset.url ? `<img alt="" src="${asset.url}">` : `<span class="missing">Preview unavailable</span>`}</div><div class="asset-copy"><label><input class="asset-selection" type="checkbox" data-name="${escapeHtml(asset.exportName)}" ${asset.selected ? "checked" : ""}> Include in ZIP</label><h3 title="${escapeHtml(asset.exportName)}">${escapeHtml(asset.exportName)}</h3><p class="meta">${escapeHtml(asset.mediaType)}<br>${asset.byteSize.toLocaleString()} bytes</p><span class="badge">${escapeHtml(asset.reason)}</span></div></article>`).join("");
+    : `<h2>No visual match candidates</h2><p>Only browser-decodable retained images are compared. The core extractor remains the source of truth for exact-byte duplicates.</p>`;
+  if (assets.filter((asset) => asset.included).length > MAX_VISUAL_CANDIDATES) groups.insertAdjacentHTML("beforeend", `<p>Visual comparison is capped at ${MAX_VISUAL_CANDIDATES} retained assets to keep local review responsive.</p>`);
+  grid.innerHTML = assets.map((asset) => `<article class="asset"><div class="preview">${asset.url ? `<img alt="" src="${asset.url}">` : `<span class="missing">${asset.included ? "Preview unavailable" : "Excluded by extraction policy"}</span>`}</div><div class="asset-copy"><label><input class="asset-selection" type="checkbox" data-path="${escapeHtml(asset.sourcePath)}" ${asset.selected ? "checked" : ""} ${asset.file ? "" : "disabled"}> Include in ZIP</label><h3 title="${escapeHtml(asset.exportName || asset.originalName)}">${escapeHtml(asset.exportName || asset.originalName)}</h3><p class="meta">${escapeHtml(asset.mediaType)}<br>${asset.byteSize.toLocaleString()} bytes</p><span class="badge">${escapeHtml(asset.reason)}</span></div></article>`).join("");
   document.querySelector("#select-all").addEventListener("click", () => {
-    reviewState.assets.forEach((asset) => { asset.selected = true; });
+    reviewState.assets.forEach((asset) => { asset.selected = Boolean(asset.included && asset.file); });
     render();
   });
   document.querySelector("#export-zip").addEventListener("click", downloadSelection);
   document.querySelectorAll(".asset-selection").forEach((checkbox) => checkbox.addEventListener("change", (event) => {
-    const asset = reviewState.assets.find((candidate) => candidate.exportName === event.target.dataset.name);
+    const asset = reviewState.assets.find((candidate) => candidate.sourcePath === event.target.dataset.path);
     if (asset) asset.selected = event.target.checked;
   }));
-  status.textContent = "Review is local to this browser tab.";
+  status.textContent = `Review is local to this browser tab. ${visuallyCompared} retained image(s) were browser-decodable.`;
 }
 
 async function downloadSelection() {
@@ -121,7 +150,7 @@ async function downloadSelection() {
   link.href = url;
   link.download = `${reviewState.manifest.sourceName.replace(/\.[^.]+$/, "")}-review.zip`;
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   status.textContent = "ZIP created locally. No files were uploaded.";
 }
 

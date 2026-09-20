@@ -1,7 +1,19 @@
 {
   "name": "document-media-extractor",
-  "version": "0.0.0-development",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first extraction of embedded media from DOCX, PPTX, and XLSX files.",
+  "keywords": [
+    "docx",
+    "pptx",
+    "xlsx",
+    "ooxml",
+    "media-extraction",
+    "local-first"
+  ],
+  "private": false,
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -19,6 +31,7 @@
   },
   "files": [
     "dist",
+    "review",
     "README.md",
     "LICENSE"
   ],
