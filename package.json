@@ -39,7 +39,7 @@
     ".": "./dist/index.js"
   },
   "bin": {
-    "document-media-extractor": "./dist/cli.js"
+    "document-media-extractor": "dist/cli.js"
   },
   "files": [
     "dist",
