@@ -152,11 +152,6 @@ function assertLimit(value: number, maximum: number | undefined, error: string):
   if (maximum !== undefined && value > maximum) throw new Error(error);
 }
 
-function archiveEntrySize(entry: unknown): number {
-  const size = (entry as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize;
-  return typeof size === "number" && Number.isFinite(size) ? size : 0;
-}
-
 function pngDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
   const signature = [137, 80, 78, 71, 13, 10, 26, 10];
   if (
@@ -439,13 +434,7 @@ export async function extractDocumentMedia(
   }
   assertNotCancelled(input.signal);
 
-  const archiveEntries = Object.values(archive.files);
-  assertLimit(archiveEntries.length, limits.maxArchiveEntries, "LIMIT_ARCHIVE_ENTRIES");
-  assertLimit(
-    archiveEntries.filter((entry) => !entry.dir).reduce((total, entry) => total + archiveEntrySize(entry), 0),
-    limits.maxExpandedBytes,
-    "LIMIT_EXPANDED_BYTES",
-  );
+  assertLimit(Object.keys(archive.files).length, limits.maxArchiveEntries, "LIMIT_ARCHIVE_ENTRIES");
 
   if (!archive.file("[Content_Types].xml") || !archive.file(requiredDocumentPart(format))) {
     throw new Error(invalidDocumentError(format));
@@ -457,37 +446,33 @@ export async function extractDocumentMedia(
 
   if (mediaPaths.length === 0) throw new Error("NO_MEDIA");
   assertLimit(mediaPaths.length, limits.maxMediaCount, "LIMIT_MEDIA_COUNT");
-  const mediaEntrySizes = mediaPaths.map((path) => archiveEntrySize(archive.files[path]));
-  assertLimit(
-    mediaEntrySizes.reduce((total, size) => total + size, 0),
-    limits.maxTotalMediaBytes,
-    "LIMIT_TOTAL_MEDIA_BYTES",
-  );
-
   const provenance = await assetProvenance(archive, format);
   assertNotCancelled(input.signal);
 
-  const candidates = await Promise.all(
-    mediaPaths.map(async (sourcePath) => {
-      assertNotCancelled(input.signal);
-      const originalName = sourcePath.split("/").at(-1) ?? sourcePath;
-      const mediaType = mediaTypeFromName(originalName);
-      const bytes = await archive.files[sourcePath].async("uint8array");
-      assertNotCancelled(input.signal);
-      assertLimit(bytes.byteLength, limits.maxMediaBytes, "LIMIT_MEDIA_BYTES");
-      const dimensions = dimensionsFor(mediaType, bytes);
-      return {
-        sourcePath,
-        originalName,
-        accessibleDescription: provenance.descriptions.get(sourcePath),
-        references: provenance.references.get(sourcePath),
-        mediaType,
-        bytes,
-        dimensions,
-        sha256: await sha256(bytes),
-      };
-    }),
-  );
+  const candidates = [];
+  let expandedBytes = 0;
+  for (const sourcePath of mediaPaths) {
+    assertNotCancelled(input.signal);
+    const originalName = sourcePath.split("/").at(-1) ?? sourcePath;
+    const mediaType = mediaTypeFromName(originalName);
+    const bytes = await archive.files[sourcePath].async("uint8array");
+    expandedBytes += bytes.byteLength;
+    assertNotCancelled(input.signal);
+    assertLimit(bytes.byteLength, limits.maxMediaBytes, "LIMIT_MEDIA_BYTES");
+    assertLimit(expandedBytes, limits.maxExpandedBytes, "LIMIT_EXPANDED_BYTES");
+    assertLimit(expandedBytes, limits.maxTotalMediaBytes, "LIMIT_TOTAL_MEDIA_BYTES");
+    const dimensions = dimensionsFor(mediaType, bytes);
+    candidates.push({
+      sourcePath,
+      originalName,
+      accessibleDescription: provenance.descriptions.get(sourcePath),
+      references: provenance.references.get(sourcePath),
+      mediaType,
+      bytes,
+      dimensions,
+      sha256: await sha256(bytes),
+    });
+  }
 
   const usedNames = new Set<string>();
   const seenHashes = new Set<string>();

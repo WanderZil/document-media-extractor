@@ -1,28 +1,42 @@
+#!/usr/bin/env node
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
-import { extractDocumentMedia } from "./index.js";
+import { extractDocumentMedia, type ExtractionPolicy } from "./index.js";
 
 type CliOptions = {
   inputPath: string;
   outputPath: string;
+  policyPath?: string;
 };
 
 function parseCliOptions(args: string[]): CliOptions {
   const [inputPath, ...rest] = args;
   const outputIndex = rest.indexOf("--out");
+  const policyIndex = rest.indexOf("--policy");
   const outputPath = outputIndex >= 0 ? rest[outputIndex + 1] : undefined;
-  if (!inputPath || !outputPath || outputIndex + 2 !== rest.length) {
-    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx|file.xlsx> --out <directory>");
+  const policyPath = policyIndex >= 0 ? rest[policyIndex + 1] : undefined;
+  const expectedArgs = policyPath ? 4 : 2;
+  if (!inputPath || !outputPath || outputIndex < 0 || ![2, 4].includes(rest.length) || rest.length !== expectedArgs) {
+    throw new Error("USAGE: document-media-extractor <file.docx|file.pptx|file.xlsx> --out <directory> [--policy policy.json]");
   }
-  return { inputPath, outputPath };
+  return { inputPath, outputPath, policyPath };
 }
 
 export async function runCli(args: string[]): Promise<void> {
-  const { inputPath, outputPath } = parseCliOptions(args);
+  const { inputPath, outputPath, policyPath } = parseCliOptions(args);
+  let policy: ExtractionPolicy | undefined;
+  if (policyPath) {
+    try {
+      policy = JSON.parse(await readFile(policyPath, "utf8")) as ExtractionPolicy;
+    } catch {
+      throw new Error("INVALID_POLICY");
+    }
+  }
   const result = await extractDocumentMedia({
     sourceName: basename(inputPath),
     bytes: new Uint8Array(await readFile(inputPath)),
+    policy,
   });
   const destination = resolve(outputPath);
   try {
