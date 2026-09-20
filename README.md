@@ -4,7 +4,7 @@ Extract original embedded media from local Office documents without uploading fi
 
 ## Phase 1 status
 
-The development build supports standard DOCX extraction through a Node API and CLI. PPTX, XLSX, policy controls, visual duplicate review, and the static local review UI are planned next.
+The development build supports standard DOCX extraction through a Node API and CLI, including local filtering, exact-content duplicate policy, SHA-256 provenance, deterministic names, and a decision-bearing Manifest. PPTX, XLSX, visual duplicate review, and the static local review UI are planned next.
 
 ## Node API
 
@@ -15,10 +15,18 @@ import { extractDocumentMedia } from "document-media-extractor";
 const result = await extractDocumentMedia({
   sourceName: "brief.docx",
   bytes: new Uint8Array(await readFile("brief.docx")),
+  policy: {
+    minWidth: 320,
+    minPixels: 100_000,
+    exactDuplicates: "exclude",
+    namingTemplate: "{source}-{index}-{name}",
+  },
 });
 ```
 
-`result.assets` contains original media bytes. `result.manifest` identifies the source document, OOXML media paths, filenames, media types, and byte sizes.
+`result.assets` contains only retained original media bytes. `result.manifest` retains every discovered item with source provenance, measurements where readable, SHA-256, export name, and an `INCLUDED` or exclusion decision. The default policy retains every media file.
+
+`{name}` uses a Word accessibility description only when its OOXML relationship maps it reliably to one media part; otherwise it falls back to the embedded filename. Names are sanitized and collision-resolved deterministically.
 
 ## Development CLI
 

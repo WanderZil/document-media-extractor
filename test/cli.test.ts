@@ -29,17 +29,19 @@ test("CLI writes original media and a manifest for a local DOCX", async () => {
     ]);
 
     assert.deepEqual(new Uint8Array(await readFile(join(outputPath, "cover.png"))), PNG_BYTES);
-    assert.deepEqual(JSON.parse(await readFile(join(outputPath, "manifest.json"), "utf8")), {
-      sourceName: "brief.docx",
-      format: "docx",
-      assets: [
-        {
-          sourcePath: "word/media/cover.png",
-          originalName: "cover.png",
-          mediaType: "image/png",
-          byteSize: PNG_BYTES.byteLength,
-        },
-      ],
+    const manifest = JSON.parse(await readFile(join(outputPath, "manifest.json"), "utf8"));
+    assert.equal(manifest.sourceName, "brief.docx");
+    assert.equal(manifest.format, "docx");
+    assert.deepEqual(manifest.policy, {});
+    assert.deepEqual(manifest.assets[0], {
+      sourcePath: "word/media/cover.png",
+      originalName: "cover.png",
+      exportName: "cover.png",
+      mediaType: "image/png",
+      byteSize: PNG_BYTES.byteLength,
+      sha256: manifest.assets[0].sha256,
+      included: true,
+      reason: "INCLUDED",
     });
   } finally {
     await rm(directory, { force: true, recursive: true });

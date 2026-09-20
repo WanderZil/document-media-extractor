@@ -31,12 +31,12 @@ export async function runCli(args: string[]): Promise<void> {
   } catch (error) {
     if (error instanceof Error && error.message === "OUTPUT_DIRECTORY_EXISTS") throw error;
   }
-  const outputNames = result.assets.map((asset) => asset.originalName);
+  const outputNames = result.assets.map((asset) => asset.exportName);
   if (new Set(outputNames).size !== outputNames.length || outputNames.includes("manifest.json")) {
     throw new Error("OUTPUT_NAME_COLLISION");
   }
   await mkdir(destination);
-  await Promise.all(result.assets.map((asset) => writeFile(resolve(destination, asset.originalName), asset.bytes)));
+  await Promise.all(result.assets.map((asset) => writeFile(resolve(destination, asset.exportName), asset.bytes)));
   await writeFile(
     resolve(destination, "manifest.json"),
     `${JSON.stringify(result.manifest, null, 2)}\n`,
