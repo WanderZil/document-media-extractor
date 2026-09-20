@@ -15,6 +15,8 @@ test("CLI writes original media and a manifest for a local DOCX", async () => {
   const inputPath = join(directory, "brief.docx");
   const outputPath = join(directory, "output");
   const archive = new JSZip();
+  archive.file("[Content_Types].xml", "<Types />");
+  archive.file("word/document.xml", "<w:document />");
   archive.file("word/media/cover.png", PNG_BYTES);
   await writeFile(inputPath, await archive.generateAsync({ type: "uint8array" }));
 
@@ -39,6 +41,33 @@ test("CLI writes original media and a manifest for a local DOCX", async () => {
         },
       ],
     });
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("CLI refuses to overwrite an existing output directory", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "document-media-extractor-"));
+  const inputPath = join(directory, "brief.docx");
+  const outputPath = join(directory, "output");
+  const archive = new JSZip();
+  archive.file("[Content_Types].xml", "<Types />");
+  archive.file("word/document.xml", "<w:document />");
+  archive.file("word/media/cover.png", PNG_BYTES);
+  await writeFile(inputPath, await archive.generateAsync({ type: "uint8array" }));
+  await writeFile(outputPath, "existing output");
+
+  try {
+    await assert.rejects(
+      () =>
+        execFile(join(process.cwd(), "node_modules/.bin/tsx"), [
+          "src/cli.ts",
+          inputPath,
+          "--out",
+          outputPath,
+        ]),
+      /OUTPUT_DIRECTORY_EXISTS/,
+    );
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

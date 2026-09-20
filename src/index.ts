@@ -63,6 +63,10 @@ export async function extractDocumentMedia(
     throw new Error("INVALID_ARCHIVE");
   }
 
+  if (!archive.file("[Content_Types].xml") || !archive.file("word/document.xml")) {
+    throw new Error("INVALID_DOCX");
+  }
+
   const mediaPaths = Object.keys(archive.files)
     .filter((path) => path.startsWith("word/media/") && !archive.files[path].dir)
     .sort();

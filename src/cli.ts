@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 import { extractDocumentMedia } from "./index.js";
@@ -25,10 +25,18 @@ export async function runCli(args: string[]): Promise<void> {
     bytes: new Uint8Array(await readFile(inputPath)),
   });
   const destination = resolve(outputPath);
-  await mkdir(destination, { recursive: true });
-  await Promise.all(
-    result.assets.map((asset) => writeFile(resolve(destination, asset.originalName), asset.bytes)),
-  );
+  try {
+    await access(destination);
+    throw new Error("OUTPUT_DIRECTORY_EXISTS");
+  } catch (error) {
+    if (error instanceof Error && error.message === "OUTPUT_DIRECTORY_EXISTS") throw error;
+  }
+  const outputNames = result.assets.map((asset) => asset.originalName);
+  if (new Set(outputNames).size !== outputNames.length || outputNames.includes("manifest.json")) {
+    throw new Error("OUTPUT_NAME_COLLISION");
+  }
+  await mkdir(destination);
+  await Promise.all(result.assets.map((asset) => writeFile(resolve(destination, asset.originalName), asset.bytes)));
   await writeFile(
     resolve(destination, "manifest.json"),
     `${JSON.stringify(result.manifest, null, 2)}\n`,

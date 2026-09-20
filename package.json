@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "fixtures": "tsx scripts/build-fixtures.ts",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit"
   },
