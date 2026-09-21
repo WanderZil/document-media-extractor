@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file.
 ### Continuous integration
 
 - Run tests, type checking, and production builds on GitHub Actions for Node.js 20 and 22.
+- Pin pnpm 10.11.1 so CI uses the lockfile-compatible package manager.
 
 ## 0.1.1 — 2026-09-20
 

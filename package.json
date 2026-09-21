@@ -28,6 +28,7 @@
   },
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@10.11.1",
   "scripts": {
     "build": "pnpm review:build && tsc -p tsconfig.build.json",
     "fixtures": "tsx scripts/build-fixtures.ts",
