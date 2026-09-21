@@ -1,6 +1,6 @@
 {
   "name": "document-media-extractor",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Local-first extraction of embedded media from document and ZIP containers.",
   "keywords": [
     "docx",
@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/WanderZil/document-media-extractor/issues"
   },
-  "homepage": "https://github.com/WanderZil/document-media-extractor#readme",
+  "homepage": "https://bulkimagedownload.com/",
   "engines": {
     "node": ">=20"
   },
