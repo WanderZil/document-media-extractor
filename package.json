@@ -1,6 +1,6 @@
 {
   "name": "document-media-extractor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local-first extraction of embedded media from document and ZIP containers.",
   "keywords": [
     "docx",
@@ -45,6 +45,7 @@
     "dist",
     "review",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "dependencies": {

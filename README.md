@@ -1,6 +1,6 @@
 # Document Media Extractor
 
-Extract original embedded media from local document containers without uploading files or running a backend. The current release supports OOXML Office documents.
+Extract original embedded media locally from OOXML, OpenDocument, EPUB, CBZ, and ZIP containers—no uploads or backend required.
 
 ## What it supports
 
@@ -20,7 +20,21 @@ Legacy binary Office formats (`.doc`, `.ppt`, `.xls`), PDF, iWork, and DRM-prote
 
 Need a no-install, browser-only workflow for one Office document? Use the matching local browser tool: [Word image extractor](https://bulkimagedownload.com/word-extract), [PPT image extractor](https://bulkimagedownload.com/ppt-extract), or [Excel image extractor](https://bulkimagedownload.com/excel-extract). Browser-only equivalents for OpenDocument, EPUB, CBZ, and ZIP archives are available on the same site.
 
-## Get started from GitHub
+## Install from npm
+
+```sh
+npm install document-media-extractor
+```
+
+Run the CLI without cloning the repository:
+
+```sh
+npx document-media-extractor ./brief.docx --out ./extracted
+```
+
+The CLI accepts every format in the table above. It writes retained original media files and a `manifest.json`, and refuses to overwrite an existing output directory.
+
+## Develop from GitHub
 
 ```sh
 git clone https://github.com/WanderZil/document-media-extractor.git
@@ -29,8 +43,6 @@ pnpm install
 pnpm build
 node dist/cli.js ./brief.docx --out ./extracted
 ```
-
-The output folder contains the retained original media files and a `manifest.json`. The CLI refuses to overwrite an existing output directory.
 
 For a policy file:
 
@@ -105,7 +117,7 @@ Processing is local. The project does not use a backend, upload documents, requi
 
 ## Related workflow
 
-Need images from webpages rather than local Office documents? [Bulk Image Download](https://bulkimagedownload.com) handles URL-based, browser-aware collection.
+Need images from webpages rather than local document containers? [Bulk Image Download](https://bulkimagedownload.com) handles URL-based, browser-aware collection.
 
 ## Contributing
 
